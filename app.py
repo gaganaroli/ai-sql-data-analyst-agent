@@ -15,7 +15,7 @@ gemini_api = os.getenv("GEMINI_API_KEY")
 # Configure Gemini
 genai.configure(api_key=gemini_api)
 
-model = genai.GenerativeModel("gemini-pro")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Streamlit page config
 st.set_page_config(
