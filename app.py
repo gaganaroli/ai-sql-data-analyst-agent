@@ -4,13 +4,18 @@ import sqlite3
 import os
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+import google.generativeai as genai
 
 # Load environment variables
 load_dotenv()
 
-# Get Groq API key
-groq_api = os.getenv("GROQ_API_KEY")
+# Get Gemini API key
+gemini_api = os.getenv("GEMINI_API_KEY")
+
+# Configure Gemini
+genai.configure(api_key=gemini_api)
+
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Streamlit page config
 st.set_page_config(
@@ -37,10 +42,10 @@ if uploaded_file:
         st.subheader("Dataset Preview")
         st.dataframe(df.head())
 
-        # Create SQLite connection
+        # SQLite connection
         conn = sqlite3.connect("data.db")
 
-        # Store dataframe into SQL table
+        # Store dataframe
         df.to_sql(
             "sales_data",
             conn,
@@ -50,7 +55,6 @@ if uploaded_file:
 
         st.success("CSV converted to SQL database successfully!")
 
-        # User question
         user_question = st.text_input(
             "Ask your question in plain English"
         )
@@ -61,14 +65,14 @@ if uploaded_file:
                 st.warning("Please enter a question")
                 st.stop()
 
-            if not groq_api:
-                st.error("Groq API key not found. Add GROQ_API_KEY in Streamlit secrets.")
+            if not gemini_api:
+                st.error(
+                    "Gemini API key not found. Add GEMINI_API_KEY in Streamlit secrets."
+                )
                 st.stop()
 
-            # Get schema
             schema = ", ".join(df.columns)
 
-            # Prompt
             prompt = f"""
             You are an expert SQL query generator.
 
@@ -91,26 +95,21 @@ if uploaded_file:
             """
 
             try:
-                # Groq LLM
-                llm = ChatGroq(
-                    groq_api_key=groq_api,
-                    model_name="llama-3.3-70b-versatile"
-                )
+                # Gemini response
+                response = model.generate_content(prompt)
 
-                response = llm.invoke(prompt)
+                sql_query = response.text.strip()
 
-                sql_query = response.content.strip()
-
-                # Remove markdown formatting if present
+                # Remove markdown formatting
                 sql_query = sql_query.replace("```sql", "")
                 sql_query = sql_query.replace("```", "")
                 sql_query = sql_query.strip()
 
-                # Display SQL query
+                # Show SQL query
                 st.subheader("Generated SQL Query")
                 st.code(sql_query, language="sql")
 
-                # Execute query
+                # Execute SQL
                 result = pd.read_sql_query(
                     sql_query,
                     conn
@@ -139,7 +138,7 @@ if uploaded_file:
                     st.pyplot(fig)
 
             except Exception as llm_error:
-                st.error(f"Groq/SQL Error: {llm_error}")
+                st.error(f"Gemini/SQL Error: {llm_error}")
 
         conn.close()
 

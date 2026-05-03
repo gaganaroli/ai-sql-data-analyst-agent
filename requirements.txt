@@ -2,6 +2,4 @@ streamlit
 pandas
 matplotlib
 python-dotenv
-langchain
-langchain-community
-langchain-groq
+google-generativeai
