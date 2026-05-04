@@ -19,24 +19,25 @@ st.set_page_config(
 )
 
 st.title("🚀 AI SQL Data Analyst Agent")
-st.write("Upload CSV → Convert to SQL → Ask Questions → Get Insights")
+st.write("Upload CSV → Convert CSV to SQL → Ask Questions in English → Get Insights")
 
-# Upload CSV file
+# Upload CSV
 uploaded_file = st.file_uploader(
     "Upload CSV File",
     type=["csv"]
 )
 
 if uploaded_file:
+
     try:
-        # Read CSV
+        # Read CSV file
         df = pd.read_csv(uploaded_file)
 
         # Show dataset preview
         st.subheader("Dataset Preview")
         st.dataframe(df.head())
 
-        # Create SQLite database connection
+        # Create SQLite database
         conn = sqlite3.connect("data.db")
 
         # Store CSV into SQL table
@@ -49,7 +50,7 @@ if uploaded_file:
 
         st.success("CSV converted to SQL database successfully!")
 
-        # User question input
+        # User input
         user_question = st.text_input(
             "Ask your question in plain English"
         )
@@ -61,15 +62,13 @@ if uploaded_file:
                 st.stop()
 
             if not groq_api:
-                st.error(
-                    "Groq API key not found. Add GROQ_API_KEY in .env or Streamlit secrets."
-                )
+                st.error("Groq API key not found.")
                 st.stop()
 
-            # Get dataset schema
+            # Get schema
             schema = ", ".join(df.columns)
 
-            # Prompt for SQL generation
+            # Prompt
             prompt = f"""
 You are an expert SQL query generator.
 
@@ -78,37 +77,66 @@ Database Table Name: sales_data
 Available Columns:
 {schema}
 
-Convert the user's natural language question into a valid SQLite SQL query.
+Convert the user's natural language question into valid SQLite SQL.
 
-Rules:
+IMPORTANT RULES:
 1. Use table name sales_data
-2. If column names contain spaces, wrap them in double quotes
-3. Return ONLY SQL query
-4. No explanation
-5. No markdown formatting
+2. If column names contain spaces, ALWAYS wrap them in double quotes
+3. Example:
+   "math score"
+   "reading score"
+   "writing score"
+4. Return ONLY SQL query
+5. No explanation
+6. No markdown formatting
 
 User Question:
 {user_question}
 """
 
             try:
-                # Groq LLM
+                # Groq model
                 llm = ChatGroq(
                     groq_api_key=groq_api,
                     model_name="llama-3.3-70b-versatile"
                 )
 
-                # Generate SQL query
+                # Generate SQL
                 response = llm.invoke(prompt)
-
                 sql_query = response.content.strip()
 
-                # Remove markdown formatting if returned
+                # Remove markdown formatting
                 sql_query = sql_query.replace("```sql", "")
                 sql_query = sql_query.replace("```", "")
                 sql_query = sql_query.strip()
 
-                # Show generated SQL
+                # Extra safety fix for columns with spaces
+                sql_query = sql_query.replace(
+                    "math score",
+                    '"math score"'
+                )
+
+                sql_query = sql_query.replace(
+                    "reading score",
+                    '"reading score"'
+                )
+
+                sql_query = sql_query.replace(
+                    "writing score",
+                    '"writing score"'
+                )
+
+                sql_query = sql_query.replace(
+                    "parental level of education",
+                    '"parental level of education"'
+                )
+
+                sql_query = sql_query.replace(
+                    "test preparation course",
+                    '"test preparation course"'
+                )
+
+                # Show SQL query
                 st.subheader("Generated SQL Query")
                 st.code(sql_query, language="sql")
 
@@ -118,7 +146,7 @@ User Question:
                     conn
                 )
 
-                # Show query results
+                # Show result
                 st.subheader("Query Result")
                 st.dataframe(result)
 
