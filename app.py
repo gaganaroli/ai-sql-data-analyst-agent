@@ -4,18 +4,13 @@ import sqlite3
 import os
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
-import google.generativeai as genai
+from langchain_groq import ChatGroq
 
 # Load environment variables
 load_dotenv()
 
-# Get Gemini API key
-gemini_api = os.getenv("GEMINI_API_KEY")
-
-# Configure Gemini
-genai.configure(api_key=gemini_api)
-
-model = genai.GenerativeModel("gemini-2.0-flash")
+# Get Groq API key
+groq_api = os.getenv("GROQ_API_KEY")
 
 # Streamlit page config
 st.set_page_config(
@@ -26,26 +21,25 @@ st.set_page_config(
 st.title("🚀 AI SQL Data Analyst Agent")
 st.write("Upload CSV → Convert to SQL → Ask Questions → Get Insights")
 
-# File upload
+# Upload CSV file
 uploaded_file = st.file_uploader(
     "Upload CSV File",
     type=["csv"]
 )
 
 if uploaded_file:
-
     try:
         # Read CSV
         df = pd.read_csv(uploaded_file)
 
-        # Show preview
+        # Show dataset preview
         st.subheader("Dataset Preview")
         st.dataframe(df.head())
 
-        # SQLite connection
+        # Create SQLite database connection
         conn = sqlite3.connect("data.db")
 
-        # Store dataframe
+        # Store CSV into SQL table
         df.to_sql(
             "sales_data",
             conn,
@@ -55,6 +49,7 @@ if uploaded_file:
 
         st.success("CSV converted to SQL database successfully!")
 
+        # User question input
         user_question = st.text_input(
             "Ask your question in plain English"
         )
@@ -62,60 +57,68 @@ if uploaded_file:
         if st.button("Generate Insights"):
 
             if not user_question:
-                st.warning("Please enter a question")
+                st.warning("Please enter a question.")
                 st.stop()
 
-            if not gemini_api:
+            if not groq_api:
                 st.error(
-                    "Gemini API key not found. Add GEMINI_API_KEY in Streamlit secrets."
+                    "Groq API key not found. Add GROQ_API_KEY in .env or Streamlit secrets."
                 )
                 st.stop()
 
+            # Get dataset schema
             schema = ", ".join(df.columns)
 
+            # Prompt for SQL generation
             prompt = f"""
-            You are an expert SQL query generator.
+You are an expert SQL query generator.
 
-            Database Table Name: sales_data
+Database Table Name: sales_data
 
-            Available Columns:
-            {schema}
+Available Columns:
+{schema}
 
-            Convert the user's natural language question into a valid SQLite SQL query.
+Convert the user's natural language question into a valid SQLite SQL query.
 
-            Rules:
-            1. Use table name sales_data
-            2. If column names contain spaces, wrap them in double quotes
-            3. Return ONLY SQL query
-            4. No explanation
-            5. No markdown formatting
+Rules:
+1. Use table name sales_data
+2. If column names contain spaces, wrap them in double quotes
+3. Return ONLY SQL query
+4. No explanation
+5. No markdown formatting
 
-            User Question:
-            {user_question}
-            """
+User Question:
+{user_question}
+"""
 
             try:
-                # Gemini response
-                response = model.generate_content(prompt)
+                # Groq LLM
+                llm = ChatGroq(
+                    groq_api_key=groq_api,
+                    model_name="llama-3.3-70b-versatile"
+                )
 
-                sql_query = response.text.strip()
+                # Generate SQL query
+                response = llm.invoke(prompt)
 
-                # Remove markdown formatting
+                sql_query = response.content.strip()
+
+                # Remove markdown formatting if returned
                 sql_query = sql_query.replace("```sql", "")
                 sql_query = sql_query.replace("```", "")
                 sql_query = sql_query.strip()
 
-                # Show SQL query
+                # Show generated SQL
                 st.subheader("Generated SQL Query")
                 st.code(sql_query, language="sql")
 
-                # Execute SQL
+                # Execute SQL query
                 result = pd.read_sql_query(
                     sql_query,
                     conn
                 )
 
-                # Show result
+                # Show query results
                 st.subheader("Query Result")
                 st.dataframe(result)
 
@@ -138,7 +141,7 @@ if uploaded_file:
                     st.pyplot(fig)
 
             except Exception as llm_error:
-                st.error(f"Gemini/SQL Error: {llm_error}")
+                st.error(f"Groq/SQL Error: {llm_error}")
 
         conn.close()
 
